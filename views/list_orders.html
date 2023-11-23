@@ -1,0 +1,12 @@
+{{ extend "base.html" }}
+
+{{ block "title" . }}Order List{{ end }}
+
+{{ block "content" . }}
+<h2>Order List</h2>
+<ul>
+    {{ range .Orders }}
+    <li>{{ .Symbol }} - {{ .Price }} - {{ .ScheduleTime }}</li>
+    {{ end }}
+</ul>
+{{ end }}
