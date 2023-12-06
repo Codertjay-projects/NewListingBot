@@ -55,6 +55,10 @@ type SentryConfig struct {
 	SentryTracesSampleRate int    `envconfig:"SENTRY_TRACES_SAMPLE_RATE" default:"1"`
 }
 
+type NewListingConfig struct {
+	NewListingSKHeader string `envconfig:"NEW_LISTING_CONFIG" default:""`
+}
+
 type Config struct {
 	EthereumConfig
 	BinanceConfig
@@ -63,6 +67,7 @@ type Config struct {
 	SEPOLIAConfig
 	PostgresConfig
 	SentryConfig
+	NewListingConfig
 }
 
 func Load() (Config, error) {

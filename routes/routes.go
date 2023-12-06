@@ -14,5 +14,6 @@ func HttpRoutes(app *fiber.App) {
 }
 
 func Routers(incomingRoutes *fiber.App) {
-	incomingRoutes.Get("/orders", controllers.ListOrdersController)
+	incomingRoutes.Get("/orders", controllers.OrderListController)
+	incomingRoutes.Get("/orders", controllers.OrderCreateController)
 }

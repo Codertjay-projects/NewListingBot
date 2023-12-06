@@ -2,10 +2,12 @@ package database
 
 import (
 	"NewListingBot/config"
+	"NewListingBot/logger"
+	"context"
 	"fmt"
+	"go.uber.org/zap"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	"log"
 )
 
 var cfg config.Config
@@ -26,7 +28,8 @@ func DBConnection() *gorm.DB {
 
 	connection, err := gorm.Open(postgres.Open(connectionString), &gorm.Config{})
 	if err != nil {
-		fmt.Println("Error connecting to database", err)
+		logger.Error(context.Background(), "Error connecting to database", zap.Error(err))
+
 	}
 
 	return connection
@@ -37,11 +40,11 @@ func CloseDB() {
 	db := DBConnection()
 	closeDb, err := db.DB()
 	if err != nil {
-		log.Panicln("Error closing database connection ", err)
+		logger.Error(context.Background(), "Error closing Database", zap.Error(err))
 	}
 
 	err = closeDb.Close()
 	if err != nil {
-		log.Panicln(err)
+		logger.Error(context.Background(), "Error closing Database", zap.Error(err))
 	}
 }

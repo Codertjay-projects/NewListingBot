@@ -6,7 +6,7 @@
 <h2>Order List</h2>
 <ul>
     {{ range .Orders }}
-    <li>{{ .Symbol }} - {{ .Price }} - {{ .ScheduleTime }}</li>
+    <li>{{ .Symbol }} - {{ .Price }} - {{ .ScheduleBuyTime }}</li>
     {{ end }}
 </ul>
 {{ end }}

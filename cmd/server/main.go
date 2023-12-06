@@ -2,14 +2,17 @@ package main
 
 import (
 	lmLogger "NewListingBot/logger"
+	"NewListingBot/middleware"
 	"NewListingBot/migrate"
 	"NewListingBot/routes"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/logger"
+	"github.com/gofiber/fiber/v2/middleware/skip"
 	"github.com/gofiber/template/html/v2"
 	"github.com/joho/godotenv"
 	"log"
 	"os"
+	"strings"
 )
 
 func main() {
@@ -30,6 +33,11 @@ func main() {
 	lmLogger.InitLogger()
 	// Make migrations
 	migrate.MigrateDatabase()
+
+	app.Use(skip.New(middleware.CustomHeaderMiddleware(), func(c *fiber.Ctx) bool {
+		// Skip the middleware for webhook routes
+		return strings.HasPrefix(c.Path(), "/api/v1/webhook")
+	}))
 
 	// Register user routes
 	routes.HttpRoutes(app)

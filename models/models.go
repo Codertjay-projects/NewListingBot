@@ -35,12 +35,17 @@ func (m *BaseModel) BeforeCreate(db *gorm.DB) (err error) {
 
 type Order struct {
 	BaseModel
-	Symbol       *string    `json:"symbol"`
-	ScheduleTime *time.Time `json:"schedule_time"`
-	Sold         *bool      `json:"sold"`
-	Price        *float64   `json:"price"`
-	SoldPrice    *float64   `json:"sold_price"`
-	Profit       *float64   `json:"profit"`
+	Symbol           *string    `json:"symbol"`
+	ScheduleBuyTime  *time.Time `json:"schedule_buy_time"`
+	ScheduleSellTime *time.Time `json:"schedule_sell_time"`
+	BoughtTime       *time.Time `json:"bought_time"`
+	SoldTime         *time.Time `json:"sold_time"`
+	Bought           *bool      `json:"bought"`
+	Sold             *bool      `json:"sold"`
+	Price            *float64   `json:"price"`
+	Quantity         *float64   `json:"quantity"`
+	SoldPrice        *float64   `json:"sold_price"`
+	Profit           *float64   `json:"profit"`
 }
 
 func (order *Order) ScheduleBuyAndSellScheduler(ctx context.Context, db *gorm.DB) {
@@ -49,33 +54,33 @@ func (order *Order) ScheduleBuyAndSellScheduler(ctx context.Context, db *gorm.DB
 	if err != nil {
 		logger.Error(context.Background(), "error loading config on scheduler", zap.Error(err))
 	}
+	mexc := exchange.NewMXCExchange(cfg)
 
 	// If the order is not sold and has a scheduled time
-	if order.ScheduleTime != nil && order.Sold != nil {
+	if order.ScheduleBuyTime != nil && order.Sold != nil {
 		// Schedule a task to buy at the specified time
-		_, err := cronScheduler.AddFunc(order.ScheduleTime.String(), func() {
-			err := BuyAndSell(ctx, db, cfg, order)
+		_, err := cronScheduler.AddFunc(order.ScheduleBuyTime.String(), func() {
+			err := buy(ctx, db, *mexc, order)
 			if err != nil {
 				logger.Error(ctx, "error buying and selling", zap.Error(err))
 			}
 		})
 		if err != nil {
-			logger.Error(ctx, "error on cron scheduler", zap.Error(err))
+			logger.Error(ctx, "error on cron scheduler buy", zap.Error(err))
 			return
 		}
 
 	}
 }
 
-func BuyAndSell(ctx context.Context, db *gorm.DB, cfg config.Config, order *Order) error {
+func buy(ctx context.Context, db *gorm.DB, mexc exchange.MEXCExchange, order *Order) error {
 
-	mexc := exchange.NewMXCExchange(cfg)
 	quoteOrderQty := *order.Price
 	buyResponse, err := mexc.Buy(*order.Symbol, int(quoteOrderQty))
 
 	if err != nil {
 		logger.Error(context.Background(), fmt.Sprintf("error buying %s", *order.Symbol), zap.Error(err))
-		return BuyAndSell(ctx, db, cfg, order)
+		return buy(ctx, db, mexc, order)
 	}
 
 	quantity, err := strconv.ParseFloat(buyResponse.OrigQty, 64)
@@ -84,15 +89,31 @@ func BuyAndSell(ctx context.Context, db *gorm.DB, cfg config.Config, order *Orde
 		return nil
 	}
 
-	_, err = mexc.Sell(*order.Symbol, quantity)
+	err = db.WithContext(ctx).Model(Order{}).Where("id = ?", order.ID).
+		Update("bought", true).
+		Update("quantity", quantity).
+		Error
 	if err != nil {
-		logger.Error(context.Background(), fmt.Sprintf("error selling %s", *order.Symbol), zap.Error(err))
 		return err
 	}
 
-	err = db.WithContext(ctx).Model(Order{}).Where("id = ?", order.ID).Update("sold", true).Error
-	if err != nil {
-		return err
+	return nil
+}
+
+func sell(ctx context.Context, db *gorm.DB, mexc exchange.MEXCExchange, order *Order) error {
+
+	if order.Bought != nil && *order.Bought == true {
+
+		_, err := mexc.Sell(*order.Symbol, *order.Quantity)
+		if err != nil {
+			logger.Error(context.Background(), fmt.Sprintf("error selling %s", *order.Symbol), zap.Error(err))
+			return err
+		}
+
+		err = db.WithContext(ctx).Model(Order{}).Where("id = ?", order.ID).Update("sold", true).Error
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
