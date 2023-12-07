@@ -23,7 +23,7 @@ func main() {
 	// first i have to load the .env
 	err := godotenv.Load()
 	if err != nil {
-		log.Fatal("Error loading .env file")
+		log.Fatal("Error loading .env file", err)
 	}
 	lmLogger.InitLogger()
 	// Make migrations
