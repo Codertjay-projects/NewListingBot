@@ -7,18 +7,15 @@ import (
 	"NewListingBot/routes"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/logger"
-	"github.com/gofiber/template/html/v2"
 	"github.com/joho/godotenv"
 	"log"
 	"os"
 )
 
 func main() {
-	engine := html.New("./views", ".html")
 
 	app := fiber.New(fiber.Config{
 		BodyLimit: 20 * 1024 * 1024, // Set the body limit to 20MB
-		Views:     engine,
 	})
 	// Use the logger middleware
 	app.Use(logger.New())

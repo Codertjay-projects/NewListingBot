@@ -66,8 +66,9 @@ func OrderCreateController(c *fiber.Ctx) error {
 
 	order = models.Order{
 		Symbol:           requestBody.Symbol,
-		ScheduleBuyTime:  &scheduleBuyTime,
-		ScheduleSellTime: &scheduleSellTime,
+		ScheduleTime:     scheduleTime,
+		ScheduleBuyTime:  &scheduleBuyTime,  // start the buy
+		ScheduleSellTime: &scheduleSellTime, // start the sell
 		Price:            requestBody.Price,
 	}
 
@@ -77,7 +78,8 @@ func OrderCreateController(c *fiber.Ctx) error {
 	}
 
 	// make the schedule
-	order.ScheduleBuyAndSellScheduler(ctx, db)
+	order.ScheduleBuyScheduler(ctx, db)
+	order.ScheduleSellScheduler(ctx, db)
 
 	return c.Status(200).JSON(order)
 }

@@ -222,8 +222,6 @@ func (m *MEXCExchange) GetMarketPrice(symbol string) (MEXCMarketPriceResponse, e
 		return result, fmt.Errorf("GetMarketPrice request failed with status code: %d", statusCode)
 	}
 
-	log.Println(string(response))
-
 	// Check if "data" key exists and is a map
 	err = json.Unmarshal(response, &result)
 	if err != nil {
