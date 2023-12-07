@@ -9,11 +9,10 @@ import (
  */
 
 func HttpRoutes(app *fiber.App) {
-
 	Routers(app)
 }
 
 func Routers(incomingRoutes *fiber.App) {
-	incomingRoutes.Get("/orders", controllers.OrderListController)
-	incomingRoutes.Get("/orders", controllers.OrderCreateController)
+	incomingRoutes.Get("api/v1/orders", controllers.OrderListController)
+	incomingRoutes.Post("api/v1/orders", controllers.OrderCreateController)
 }

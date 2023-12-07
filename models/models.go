@@ -10,6 +10,7 @@ import (
 	"github.com/robfig/cron/v3"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
+	"log"
 	"strconv"
 	"time"
 )
@@ -17,8 +18,19 @@ import (
 var cronScheduler *cron.Cron
 
 func init() {
-	cronScheduler = cron.New()
+	loc, err := time.LoadLocation("Africa/Lagos") // Use the appropriate time zone for West Africa
+	if err != nil {
+		// Handle error, maybe log it
+		fmt.Println("Error loading location:", err)
+		return
+	}
+
+	cronScheduler = cron.New(cron.WithLocation(loc))
 	go cronScheduler.Start()
+}
+
+func timeToCron(t time.Time) string {
+	return fmt.Sprintf("%d %d %d %d *", t.Minute(), t.Hour(), t.Day(), t.Month())
 }
 
 // BaseModel / This is actually used to create most used fields like timestamp, uuid and do some custom process **/
@@ -57,19 +69,49 @@ func (order *Order) ScheduleBuyAndSellScheduler(ctx context.Context, db *gorm.DB
 	mexc := exchange.NewMXCExchange(cfg)
 
 	// If the order is not sold and has a scheduled time
-	if order.ScheduleBuyTime != nil && order.Sold != nil {
+	if order.ScheduleBuyTime != nil && order.BoughtTime == nil {
+		// Calculate the duration until the scheduled buy time
+
 		// Schedule a task to buy at the specified time
-		_, err := cronScheduler.AddFunc(order.ScheduleBuyTime.String(), func() {
-			err := buy(ctx, db, *mexc, order)
-			if err != nil {
-				logger.Error(ctx, "error buying and selling", zap.Error(err))
+		_, err := cronScheduler.AddFunc(timeToCron(*order.ScheduleBuyTime), func() {
+
+			// Retry the buy operation in a loop for the next 80 seconds which is 20 seconds after listing time
+			endTime := order.ScheduleBuyTime.Add(time.Second * 80)
+
+			log.Println("startedBuy", time.Now())
+			log.Println("endTime", endTime)
+			var counter int
+			for time.Now().Sub(endTime) > 0 {
+				counter += 1
+				log.Println("counter", counter, "for buy time", time.Now())
+
+				err := buy(ctx, db, *mexc, order)
+				if err != nil {
+					logger.Error(ctx, "error buying and selling", zap.Error(err))
+				} else {
+					// Break the loop if buy is successful
+					break
+				}
 			}
 		})
 		if err != nil {
 			logger.Error(ctx, "error on cron scheduler buy", zap.Error(err))
 			return
 		}
+	}
 
+	// Schedule a task to sell at the specified time
+	if order.ScheduleSellTime != nil && order.Bought != nil && *order.Bought == true {
+		_, err := cronScheduler.AddFunc(timeToCron(*order.ScheduleSellTime), func() {
+			err := sell(ctx, db, *mexc, order)
+			if err != nil {
+				logger.Error(ctx, "error selling", zap.Error(err))
+			}
+		})
+		if err != nil {
+			logger.Error(ctx, "error on cron scheduler sell", zap.Error(err))
+			return
+		}
 	}
 }
 
@@ -77,10 +119,11 @@ func buy(ctx context.Context, db *gorm.DB, mexc exchange.MEXCExchange, order *Or
 
 	quoteOrderQty := *order.Price
 	buyResponse, err := mexc.Buy(*order.Symbol, int(quoteOrderQty))
-
+	boughtTime := time.Now()
+	log.Println("buyResponse", buyResponse)
 	if err != nil {
 		logger.Error(context.Background(), fmt.Sprintf("error buying %s", *order.Symbol), zap.Error(err))
-		return buy(ctx, db, mexc, order)
+		return err
 	}
 
 	quantity, err := strconv.ParseFloat(buyResponse.OrigQty, 64)
@@ -91,6 +134,7 @@ func buy(ctx context.Context, db *gorm.DB, mexc exchange.MEXCExchange, order *Or
 
 	err = db.WithContext(ctx).Model(Order{}).Where("id = ?", order.ID).
 		Update("bought", true).
+		Update("bought_time", boughtTime).
 		Update("quantity", quantity).
 		Error
 	if err != nil {
@@ -104,13 +148,17 @@ func sell(ctx context.Context, db *gorm.DB, mexc exchange.MEXCExchange, order *O
 
 	if order.Bought != nil && *order.Bought == true {
 
-		_, err := mexc.Sell(*order.Symbol, *order.Quantity)
+		sellResponse, err := mexc.Sell(*order.Symbol, *order.Quantity)
+		soldTime := time.Now()
 		if err != nil {
 			logger.Error(context.Background(), fmt.Sprintf("error selling %s", *order.Symbol), zap.Error(err))
 			return err
 		}
+		log.Println("sellResponse", sellResponse)
 
-		err = db.WithContext(ctx).Model(Order{}).Where("id = ?", order.ID).Update("sold", true).Error
+		err = db.WithContext(ctx).Model(Order{}).Where("id = ?", order.ID).
+			Update("sold", true).
+			Update("sold_time", soldTime).Error
 		if err != nil {
 			return err
 		}

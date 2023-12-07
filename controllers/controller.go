@@ -61,19 +61,23 @@ func OrderCreateController(c *fiber.Ctx) error {
 	}
 
 	scheduleTime := requestBody.ScheduleTime
-	scheduleSellTime := scheduleTime.Add(time.Minute * 15)
+	scheduleBuyTime := scheduleTime.Add(-time.Second * 30) // subtract 1 minute for ScheduleBuyTime
+	scheduleSellTime := scheduleTime.Add(time.Minute * 1)  // add 15 minutes for ScheduleSellTime
+
 	order = models.Order{
 		Symbol:           requestBody.Symbol,
-		ScheduleBuyTime:  requestBody.ScheduleTime,
+		ScheduleBuyTime:  &scheduleBuyTime,
 		ScheduleSellTime: &scheduleSellTime,
 		Price:            requestBody.Price,
-		Profit:           nil,
 	}
 
 	err := db.WithContext(ctx).Model(&models.Order{}).Create(&order).Error
 	if err != nil {
 		return c.Status(400).JSON(Response{Errors: err.Error(), Success: false, Detail: err.Error()})
 	}
+
+	// make the schedule
+	order.ScheduleBuyAndSellScheduler(ctx, db)
 
 	return c.Status(200).JSON(order)
 }

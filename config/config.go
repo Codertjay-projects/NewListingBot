@@ -38,7 +38,8 @@ type MEXCConfig struct {
 	MEXCExchangeAPIKey    string `envconfig:"MEXC_EXCHANGE_API_KEY" default:""`
 	MEXCExchangeAPISecret string `envconfig:"MEXC_EXCHANGE_API_SECRET" default:""`
 	MEXCExchangeInfoURL   string `envconfig:"MEXC_EXCHANGE_INFO_URL" default:"https://api.mexc.com/api/v3/ticker/24hr"`
-	MEXCOrderURL          string `envconfig:"MEXC_ORDER_URL" default:"https://api.mexc.com/api/v3/order"`
+	//MEXCOrderURL          string `envconfig:"MEXC_ORDER_URL" default:"https://api.mexc.com/api/v3/order/test"`
+	MEXCOrderURL string `envconfig:"MEXC_ORDER_URL" default:"https://api.mexc.com/api/v3/order"`
 }
 type PostgresConfig struct {
 	PostgresUser         string `envconfig:"POSTGRES_USER" default:"postgres"`
@@ -56,7 +57,7 @@ type SentryConfig struct {
 }
 
 type NewListingConfig struct {
-	NewListingSKHeader string `envconfig:"NEW_LISTING_CONFIG" default:""`
+	NewListingSKHeader string `envconfig:"NEW_LISTING_SK_HEADER" default:""`
 }
 
 type Config struct {

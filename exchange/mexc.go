@@ -13,7 +13,6 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"time"
 )
 
 type MEXCExchange struct {
@@ -71,7 +70,7 @@ func (m *MEXCExchange) sendRequest(method, endpoint string, payload interface{})
 	req.Header.Add("accept", "application/json")
 	req.Header.Add("content-type", "application/json")
 	req.Header.Add("Content-Length", fmt.Sprint(len(requestPayload)))
-	req.Header.Add("api-key", m.cfg.MEXCExchangeAPIKey)
+	req.Header.Add("X-MEXC-APIKEY", m.cfg.MEXCExchangeAPIKey)
 
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -85,24 +84,48 @@ func (m *MEXCExchange) sendRequest(method, endpoint string, payload interface{})
 		return nil, res.StatusCode, err
 	}
 
+	log.Println("The response body", string(responseBody))
+
 	return responseBody, res.StatusCode, nil
 }
 
 // generateSignature generates the HMAC-SHA256 signature for the request
-func (m *MEXCExchange) generateSignature(timestamp int64) string {
-	// Combine API secret and request payload to create the message
-	message := fmt.Sprintf("%s%d", m.cfg.MEXCExchangeAPISecret, timestamp)
-
+func (m *MEXCExchange) generateSignature(payload string) string {
 	// Create an HMAC-SHA256 hasher
 	hasher := hmac.New(sha256.New, []byte(m.cfg.MEXCExchangeAPISecret))
 
-	// Write the message to the hasher
-	hasher.Write([]byte(message))
+	// Write the payload to the hasher
+	hasher.Write([]byte(payload))
 
 	// Get the hashed result and encode as hexadecimal
 	signature := hex.EncodeToString(hasher.Sum(nil))
 
 	return signature
+}
+
+// getServerTime fetches the server time from the specified API endpoint
+func getServerTime() (int64, error) {
+	response, err := http.Get("https://api.mexc.com/api/v3/time")
+	if err != nil {
+		return 0, fmt.Errorf("failed to make GET request: %v", err)
+	}
+	defer response.Body.Close()
+
+	body, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return 0, fmt.Errorf("failed to read response body: %v", err)
+	}
+
+	var ServerTime struct {
+		ServerTime int64 `json:"serverTime"`
+	}
+
+	err = json.Unmarshal(body, &ServerTime)
+	if err != nil {
+		return 0, err
+	}
+
+	return ServerTime.ServerTime, nil
 }
 
 func (m *MEXCExchange) Buy(symbol string, quoteOrderQty int) (NewMEXCOrderResponse, error) {
@@ -111,15 +134,22 @@ func (m *MEXCExchange) Buy(symbol string, quoteOrderQty int) (NewMEXCOrderRespon
 	payload := map[string]interface{}{}
 
 	// Generate timestamp
-	timestamp := time.Now().UnixNano() / int64(time.Millisecond)
+	timestamp, err := getServerTime()
+	if err != nil {
+		return result, fmt.Errorf("buy market request failed: %v", err)
+	}
+
+	// Construct the payload
+	params := fmt.Sprintf("symbol=%s&side=BUY&type=MARKET&quoteOrderQty=%d&timestamp=%d&recvWindow=5000", symbol, quoteOrderQty, timestamp)
 
 	// Generate signature
-	signature := m.generateSignature(timestamp)
+	signature := m.generateSignature(params)
 
 	// Construct the URL with the timestamp and signature
-	url := fmt.Sprintf("%s?symbol=%s&side=BUY&type=MARKET&quoteOrderQty=%f&timestamp=%d&signature=%s",
-		m.cfg.MEXCOrderURL, symbol, quoteOrderQty, timestamp, signature)
+	url := fmt.Sprintf("%s?%s&signature=%s",
+		m.cfg.MEXCOrderURL, params, signature)
 
+	log.Println(url)
 	response, statusCode, err := m.sendRequest("POST", url, payload)
 	if err != nil {
 		return result, fmt.Errorf("buy market request failed: %v", err)
@@ -145,14 +175,20 @@ func (m *MEXCExchange) Sell(symbol string, quantity float64) (NewMEXCOrderRespon
 	payload := map[string]interface{}{}
 
 	// Generate timestamp
-	timestamp := time.Now().UnixNano() / int64(time.Millisecond)
+	timestamp, err := getServerTime()
+	if err != nil {
+		return result, fmt.Errorf("buy market request failed: %v", err)
+	}
+
+	params := fmt.Sprintf("%s?symbol=%s&side=SELL&type=MARKET&quantity=%f&timestamp=%d&%d&recvWindow=5000",
+		m.cfg.MEXCOrderURL, symbol, quantity, timestamp)
 
 	// Generate signature
-	signature := m.generateSignature(timestamp)
+	signature := m.generateSignature(params)
 
 	// Construct the URL with the timestamp and signature
-	url := fmt.Sprintf("%s?symbol=%s&side=SELL&type=MARKET&quantity=%f&timestamp=%d&signature=%s",
-		m.cfg.MEXCOrderURL, symbol, quantity, timestamp, signature)
+	url := fmt.Sprintf("%s?%s&signature=%s",
+		m.cfg.MEXCOrderURL, params, signature)
 
 	response, statusCode, err := m.sendRequest("POST", url, payload)
 	if err != nil {
