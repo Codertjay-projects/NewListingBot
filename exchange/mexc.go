@@ -50,6 +50,37 @@ type MEXCMarketPriceResponse struct {
 	Count              interface{} `json:"count"`
 }
 
+type MarketData struct {
+	Timezone        string        `json:"timezone"`
+	ServerTime      int64         `json:"serverTime"`
+	RateLimits      []interface{} `json:"rateLimits"`
+	ExchangeFilters []interface{} `json:"exchangeFilters"`
+	Symbols         []struct {
+		Symbol                     string        `json:"symbol"`
+		Status                     string        `json:"status"`
+		BaseAsset                  string        `json:"baseAsset"`
+		BaseAssetPrecision         int           `json:"baseAssetPrecision"`
+		QuoteAsset                 string        `json:"quoteAsset"`
+		QuotePrecision             int           `json:"quotePrecision"`
+		QuoteAssetPrecision        int           `json:"quoteAssetPrecision"`
+		BaseCommissionPrecision    int           `json:"baseCommissionPrecision"`
+		QuoteCommissionPrecision   int           `json:"quoteCommissionPrecision"`
+		OrderTypes                 []string      `json:"orderTypes"`
+		IsSpotTradingAllowed       bool          `json:"isSpotTradingAllowed"`
+		IsMarginTradingAllowed     bool          `json:"isMarginTradingAllowed"`
+		QuoteAmountPrecision       string        `json:"quoteAmountPrecision"`
+		BaseSizePrecision          string        `json:"baseSizePrecision"`
+		Permissions                []string      `json:"permissions"`
+		Filters                    []interface{} `json:"filters"`
+		MaxQuoteAmount             string        `json:"maxQuoteAmount"`
+		MakerCommission            string        `json:"makerCommission"`
+		TakerCommission            string        `json:"takerCommission"`
+		QuoteAmountPrecisionMarket string        `json:"quoteAmountPrecisionMarket"`
+		MaxQuoteAmountMarket       string        `json:"maxQuoteAmountMarket"`
+		FullName                   string        `json:"fullName"`
+	} `json:"symbols"`
+}
+
 func NewMXCExchange(cfg config.Config) *MEXCExchange {
 	return &MEXCExchange{
 		cfg: cfg,
@@ -128,6 +159,28 @@ func getServerTime() (int64, error) {
 	return ServerTime.ServerTime, nil
 }
 
+func (m *MEXCExchange) GetMarketData() (MarketData, error) {
+	var result MarketData
+
+	response, err := http.Get("https://api.mexc.com/api/v3/exchangeInfo")
+	if err != nil {
+		return result, fmt.Errorf("failed to make GET request: %v", err)
+	}
+	defer response.Body.Close()
+
+	body, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return result, fmt.Errorf("failed to read response body: %v", err)
+	}
+
+	err = json.Unmarshal(body, &result)
+	if err != nil {
+		return result, err
+	}
+
+	return result, nil
+}
+
 func (m *MEXCExchange) Buy(symbol string, quoteOrderQty int) (NewMEXCOrderResponse, error) {
 	var result NewMEXCOrderResponse
 
@@ -149,7 +202,6 @@ func (m *MEXCExchange) Buy(symbol string, quoteOrderQty int) (NewMEXCOrderRespon
 	url := fmt.Sprintf("%s?%s&signature=%s",
 		m.cfg.MEXCOrderURL, params, signature)
 
-	log.Println(url)
 	response, statusCode, err := m.sendRequest("POST", url, payload)
 	if err != nil {
 		return result, fmt.Errorf("buy market request failed: %v", err)

@@ -10,28 +10,28 @@ type EthereumConfig struct {
 	EthereumPrivateKey   string `envconfig:"ETHEREUM_PRIVATE_KEY" default:""`
 	EthereumOwnerAddress string `envconfig:"ETHEREUM_OWNER_ADDRESS" default:""`
 	EthereumInfuraURL    string `envconfig:"ETHEREUM_INFURA_URL" default:""`
-	EthereumChainID      int    `json:"ETHEREUM_CHAIN_ID" default:"1"`
+	EthereumChainID      int    `envconfig:"ETHEREUM_CHAIN_ID" default:"1"`
 }
 
 type BinanceConfig struct {
 	BinancePrivateKey   string `envconfig:"BINANCE_PRIVATE_KEY" default:""`
 	BinanceOwnerAddress string `envconfig:"BINANCE_OWNER_ADDRESS" default:""`
 	BinanceInfuraURL    string `envconfig:"BINANCE_INFURA_URL" default:""`
-	BinanceChainID      int    `json:"BINANCE_CHAIN_ID" default:"56"`
+	BinanceChainID      int    `envconfig:"BINANCE_CHAIN_ID" default:"56"`
 }
 
 type PolygonConfig struct {
 	PolygonPrivateKey   string `envconfig:"POLYGON_PRIVATE_KEY" default:""`
 	PolygonOwnerAddress string `envconfig:"POLYGON_OWNER_ADDRESS" default:""`
 	PolygonInfuraURL    string `envconfig:"POLYGON_INFURA_URL" default:""`
-	PolygonChainID      int    `json:"POLYGON_CHAIN_ID" default:"137"`
+	PolygonChainID      int    `envconfig:"POLYGON_CHAIN_ID" default:"137"`
 }
 
 type SEPOLIAConfig struct {
 	SepoliaPrivateKey   string `envconfig:"SEPOLIA_PRIVATE_KEY" default:""`
 	SepoliaOwnerAddress string `envconfig:"SEPOLIA_OWNER_ADDRESS" default:""`
 	SepoliaInfuraURL    string `envconfig:"SEPOLIA_INFURA_URL" default:""`
-	SepoliaChainID      int    `json:"SEPOLIA_CHAIN_ID" default:"11155111"`
+	SepoliaChainID      int    `envconfig:"SEPOLIA_CHAIN_ID" default:"11155111"`
 }
 
 type MEXCConfig struct {

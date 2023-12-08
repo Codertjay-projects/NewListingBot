@@ -48,59 +48,52 @@ func (m *BaseModel) BeforeCreate(db *gorm.DB) (err error) {
 
 type Order struct {
 	BaseModel
-	Symbol           *string    `json:"symbol"`
-	ScheduleTime     *time.Time `json:"schedule_time"`
-	ScheduleBuyTime  *time.Time `json:"schedule_buy_time"`
-	ScheduleSellTime *time.Time `json:"schedule_sell_time"`
-	BoughtTime       *time.Time `json:"bought_time"`
-	SoldTime         *time.Time `json:"sold_time"`
-	Bought           *bool      `json:"bought"`
-	Sold             *bool      `json:"sold"`
-	Price            *float64   `json:"price"`
-	Quantity         *float64   `json:"quantity"`
-	SoldPrice        *float64   `json:"sold_price"`
-	Profit           *float64   `json:"profit"`
+	Symbol           *string       `json:"symbol"`
+	ScheduleTime     *time.Time    `json:"schedule_time"`
+	ScheduleSellTime *time.Time    `json:"schedule_sell_time"`
+	BoughtTime       *time.Time    `json:"bought_time"`
+	SoldTime         *time.Time    `json:"sold_time"`
+	Bought           *bool         `json:"bought"`
+	Sold             *bool         `json:"sold"`
+	Price            *float64      `json:"price"`
+	Quantity         *float64      `json:"quantity"`
+	SoldPrice        *float64      `json:"sold_price"`
+	Profit           *float64      `json:"profit"`
+	BuyComplete      chan struct{} `json:"-" gorm:"-"`
 }
 
-func (order *Order) ScheduleBuyScheduler(ctx context.Context, db *gorm.DB) {
+func (order *Order) ScheduleBuyScheduler(ctx context.Context, db *gorm.DB, orderID uuid.UUID, scheduleTime time.Time) {
+	var foundOrder Order
 
 	cfg, err := config.Load()
 	if err != nil {
 		logger.Error(context.Background(), "error loading config on scheduler", zap.Error(err))
+		return
 	}
 
 	mexc := exchange.NewMXCExchange(cfg)
 
+	err = db.WithContext(ctx).Model(&Order{}).Where("id = ?", orderID).First(&foundOrder).Error
+	if err != nil {
+		log.Println("error fetching order", err)
+		return
+	}
+
 	// If the order is not sold and has a scheduled time
-	if order.ScheduleBuyTime != nil && order.BoughtTime == nil {
-		// Calculate the duration until the scheduled buy time
-
+	if foundOrder.ScheduleTime != nil && foundOrder.BoughtTime == nil {
 		// Schedule a task to buy at the specified time
-		_, err := cronScheduler.AddFunc(timeToCron(*order.ScheduleBuyTime), func() {
-
-			// Retry the buy operation in a loop for the next 80 seconds which is 20 seconds after listing time
-			endTime := order.ScheduleTime.Add(time.Second * 10)
-
-			var counter int
-			for time.Now().In(&timeLocation).Before(endTime) {
-				counter += 1
-				log.Println("counter", counter, "for buy time", time.Now())
-
-				err := buy(ctx, db, *mexc, order)
-				if err != nil {
-					logger.Error(ctx, "error buying and selling", zap.Error(err))
-				} else {
-					// Break the loop if buy is successful
-					break
-				}
+		_, err := cronScheduler.AddFunc(timeToCron(scheduleTime), func() {
+			err := buy(ctx, db, *mexc, foundOrder)
+			if err != nil {
+				logger.Error(ctx, "error buying and selling", zap.Error(err))
 			}
 		})
 		if err != nil {
 			logger.Error(ctx, "error on cron scheduler buy", zap.Error(err))
 			return
 		}
-	}
 
+	}
 }
 
 func (order *Order) ScheduleSellScheduler(ctx context.Context, db *gorm.DB) {
@@ -126,12 +119,12 @@ func (order *Order) ScheduleSellScheduler(ctx context.Context, db *gorm.DB) {
 	}
 }
 
-func buy(ctx context.Context, db *gorm.DB, mexc exchange.MEXCExchange, order *Order) error {
+func buy(ctx context.Context, db *gorm.DB, mexc exchange.MEXCExchange, order Order) error {
 
 	quoteOrderQty := *order.Price
 	buyResponse, err := mexc.Buy(*order.Symbol, int(quoteOrderQty))
 	boughtTime := time.Now()
-	log.Println("buyResponse", buyResponse)
+
 	if err != nil {
 		logger.Error(context.Background(), fmt.Sprintf("error buying %s", *order.Symbol), zap.Error(err))
 		return err
@@ -152,6 +145,8 @@ func buy(ctx context.Context, db *gorm.DB, mexc exchange.MEXCExchange, order *Or
 		return err
 	}
 
+	// Signal completion through the channel
+	order.BuyComplete <- struct{}{}
 	return nil
 }
 

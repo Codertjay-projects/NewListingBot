@@ -2,7 +2,9 @@ package controllers
 
 import (
 	"NewListingBot/adapters"
+	"NewListingBot/config"
 	"NewListingBot/database"
+	"NewListingBot/exchange"
 	"NewListingBot/models"
 	"NewListingBot/serializers"
 	"context"
@@ -61,13 +63,11 @@ func OrderCreateController(c *fiber.Ctx) error {
 	}
 
 	scheduleTime := requestBody.ScheduleTime
-	scheduleBuyTime := scheduleTime.Add(-time.Second * 30) // subtract 1 minute for ScheduleBuyTime
-	scheduleSellTime := scheduleTime.Add(time.Minute * 1)  // add 15 minutes for ScheduleSellTime
+	scheduleSellTime := scheduleTime.Add(time.Minute * 1) // add 15 minutes for ScheduleSellTime
 
 	order = models.Order{
 		Symbol:           requestBody.Symbol,
 		ScheduleTime:     scheduleTime,
-		ScheduleBuyTime:  &scheduleBuyTime,  // start the buy
 		ScheduleSellTime: &scheduleSellTime, // start the sell
 		Price:            requestBody.Price,
 	}
@@ -77,9 +77,53 @@ func OrderCreateController(c *fiber.Ctx) error {
 		return c.Status(400).JSON(Response{Errors: err.Error(), Success: false, Detail: err.Error()})
 	}
 
-	// make the schedule
-	order.ScheduleBuyScheduler(ctx, db)
+	// make the schedule for all buy operations
+	order.ScheduleBuyScheduler(ctx, db, order.ID, order.ScheduleTime.Add(-time.Second*5))
+	order.ScheduleBuyScheduler(ctx, db, order.ID, order.ScheduleTime.Add(-time.Second*5))
+	order.ScheduleBuyScheduler(ctx, db, order.ID, order.ScheduleTime.Add(-time.Second*5))
+	order.ScheduleBuyScheduler(ctx, db, order.ID, order.ScheduleTime.Add(-time.Second*4))
+	order.ScheduleBuyScheduler(ctx, db, order.ID, order.ScheduleTime.Add(-time.Second*4))
+	order.ScheduleBuyScheduler(ctx, db, order.ID, order.ScheduleTime.Add(-time.Second*4))
+	order.ScheduleBuyScheduler(ctx, db, order.ID, order.ScheduleTime.Add(-time.Second*4))
+	order.ScheduleBuyScheduler(ctx, db, order.ID, order.ScheduleTime.Add(-time.Second*3))
+	order.ScheduleBuyScheduler(ctx, db, order.ID, order.ScheduleTime.Add(-time.Second*3))
+	order.ScheduleBuyScheduler(ctx, db, order.ID, order.ScheduleTime.Add(-time.Second*3))
+	order.ScheduleBuyScheduler(ctx, db, order.ID, order.ScheduleTime.Add(-time.Second*2))
+	order.ScheduleBuyScheduler(ctx, db, order.ID, order.ScheduleTime.Add(-time.Second*2))
+	order.ScheduleBuyScheduler(ctx, db, order.ID, order.ScheduleTime.Add(-time.Second*2))
+	order.ScheduleBuyScheduler(ctx, db, order.ID, order.ScheduleTime.Add(-time.Second*1))
+	order.ScheduleBuyScheduler(ctx, db, order.ID, order.ScheduleTime.Add(-time.Second*1))
+	order.ScheduleBuyScheduler(ctx, db, order.ID, order.ScheduleTime.Add(-time.Second*1))
+
+	// make the schedule for all sell operations
 	order.ScheduleSellScheduler(ctx, db)
 
 	return c.Status(200).JSON(order)
+}
+
+func GetMarketDataController(c *fiber.Ctx) error {
+
+	cfg, err := config.Load()
+	if err != nil {
+		return c.Status(400).JSON(Response{Message: err.Error(), Success: false})
+	}
+	mexc := exchange.NewMXCExchange(cfg)
+
+	token := c.Query("token")
+
+	marketData, err := mexc.GetMarketData()
+	if err != nil {
+		return c.Status(400).JSON(Response{Message: err.Error(), Success: false})
+	}
+
+	if token != "" {
+		for index, symbol := range marketData.Symbols {
+
+			if symbol.BaseAsset == token {
+				return c.Status(200).JSON(marketData.Symbols[index])
+			}
+		}
+	}
+
+	return c.Status(200).JSON(marketData)
 }
